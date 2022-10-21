@@ -5,10 +5,13 @@ import os
 import requests
 import re
 from bs4 import BeautifulSoup
+import requests
+import pathlib
 
-def get_list():
-    url = 'https://www.zhihu.com/api/v4/columns/{0}/articles?\
-    include=data%5B%2A%5D.admin_closed_comment%2Ccomment_count%2Csuggest_edit%2Cis_title_image_full_screen%2Ccan_comment%2Cupvoted_followees%2Ccan_open_tipjar%2Ccan_tip%2Cvoteup_count%2Cvoting%2Ctopics%2Creview_info%2Cauthor.is_following&limit=10&offset=0'.format(author)
+
+
+def get_list(column_id, headers):
+    url = f'https://www.zhihu.com/api/v4/columns/{column_id}/items'
     print(url)
     article_dict = {}
     while True:
@@ -31,7 +34,7 @@ def get_list():
         url = j['paging']['next']
         time.sleep(2)
 
-    with open('zhihu_ids.txt', 'w',encoding='utf-8') as f:
+    with open(OUTPUT_FOLDER / 'zhihu_ids.txt', 'w',encoding='utf-8') as f:
         items = sorted(article_dict.items())
         for item in items:
             f.write('%s %s\n' % item)
@@ -47,7 +50,7 @@ def get_html(aid, title, index):
         print('saving', title)
     url = 'https://zhuanlan.zhihu.com/p/' + aid
     html = requests.get(url, headers=headers).text
-    soup = BeautifulSoup(html, 'lxml')
+    soup = BeautifulSoup(html)
     try:
         content = soup.find("div",{"class":"Post-RichText"}).prettify()
     except:
@@ -59,12 +62,12 @@ def get_html(aid, title, index):
     content = re.sub(r'src="data:image.*?"', '', content)
     content = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1>%s</h1>%s</body></html>' % (
         title, content)
-    with open(file_name, 'w',encoding='utf-8') as f:
+    with open(OUTPUT_FOLDER / file_name, 'w',encoding='utf-8') as f:
         f.write(content)
     time.sleep(2)
 
 def get_details():
-    with open('zhihu_ids.txt','r',encoding='utf-8') as f:
+    with open(OUTPUT_FOLDER / 'zhihu_ids.txt','r',encoding='utf-8') as f:
         i = 1
         for line in f:
             lst = line.strip().split(' ')
@@ -94,7 +97,6 @@ def to_pdf():
 直接调用 wkhtmltopdf 生成 pdf 文档
 """
 def get_args():
-    import pdfkit
     print('exporting PDF...')
     htmls = ""
     for root, dirs, files in os.walk('.'):
@@ -105,18 +107,37 @@ def get_args():
     return htmls
 
 if __name__ == '__main__':
-    author = input('Please input author name:(default vczh-nichijou)')
-    if not author:
-        author = 'vczh-nichijou'
+    column_id = "c_116602381"
+    column_name = "魔鬼眼中的自然界-贾明子"
     headers = {
-        'origin': 'https://zhuanlan.zhihu.com',
-        'referer': 'https://zhuanlan.zhihu.com/{0}'.format(author),
-        'User-Agent': 'Mozilla/5.0'
+        'authority': 'www.zhihu.com',
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,en-GB;q=0.6',
+        'referer': f'https://www.zhihu.com/column/{column_id}',
+        'sec-ch-ua': '"Chromium";v="106", "Microsoft Edge";v="106", "Not;A=Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
     }
-    get_list()
-    get_details()
+
+    OUTPUT_FOLDER = pathlib.Path("output") /column_name
+
+
+    # os.makedirs(OUTPUT_FOLDER)
+
+    # get_list(column_id, headers)
+    # get_details()
     pdfArgs=get_args()
-    pdfEnd = 'wkhtmltopdf '+pdfArgs+author+".pdf"
+    # to display chinese
+    # `apt-get install fonts-wqy-microhei ttf-wqy-microhei fonts-wqy-zenhei ttf-wqy-zenhei`
+    # todo: currently can only convert each page separately
+    # todo: the  font is too small
+    # I think I should use calibre
+    # https://www.reddit.com/r/Calibre/comments/9pzf70/merging_html_files_into_a_single_epub/
+    pdfEnd = 'wkhtmltopdf '+pdfArgs+column_name+".pdf"
     if(os.system(pdfEnd)==0):
         print("exporting PDF success")
     else:
